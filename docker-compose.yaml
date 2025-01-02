@@ -1,56 +1,99 @@
-version: '3.7'
+version: '3'
 
 services:
-  postgres:
-    image: postgres:14
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: airflow-webserver:latest
+    container_name: airflow-webserver
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydb
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs:rw
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres
+      - mongodb
+      - airflow-scheduler
+      - hadoop
+
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: airflow-scheduler:latest
+    container_name: airflow-scheduler
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs:rw
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres
+      - mongodb
+      - hadoop
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
     ports:
       - "5432:5432"
-    networks:
-      - backend
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   mongodb:
     image: mongo:latest
+    container_name: mongodb
     ports:
       - "27017:27017"
-    networks:
-      - backend
+    volumes:
+      - ./mongodb/init.js:/docker-entrypoint-initdb.d/init.js
 
   hadoop:
     image: sequenceiq/hadoop-docker:2.7.1
+    container_name: hadoop
     environment:
-      HADOOP_VERSION: 2.7.1
+      - HADOOP_PORT=9000
     ports:
-      - "50070:50070"
-      - "8088:8088"
-    networks:
-      - backend
+      - "50070:50070" 
+      - "9000:9000"    
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
 
-  hive:
-    image: bde2020/hive:latest
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: airflow-init:latest
+    container_name: airflow-init
     environment:
-      HIVE_METASTORE_URI: thrift://hive-metastore:9083
-    ports:
-      - "10000:10000"
-    networks:
-      - backend
-
-  airflow:
-    image: apache/airflow:2.3.0
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@postgres/mydb
-      AIRFLOW__CORE__FERNET_KEY: 'YOUR_FERNET_KEY'
-    ports:
-      - "8080:8080"
-    networks:
-      - backend
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags 
-
-networks:
-  backend:
-    driver: bridge
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    entrypoint: ["airflow", "db", "init"]
+    depends_on:
+      - postgres
