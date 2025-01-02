@@ -1,0 +1,56 @@
+version: '3.7'
+
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    networks:
+      - backend
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - backend
+
+  hadoop:
+    image: sequenceiq/hadoop-docker:2.7.1
+    environment:
+      HADOOP_VERSION: 2.7.1
+    ports:
+      - "50070:50070"
+      - "8088:8088"
+    networks:
+      - backend
+
+  hive:
+    image: bde2020/hive:latest
+    environment:
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
+    ports:
+      - "10000:10000"
+    networks:
+      - backend
+
+  airflow:
+    image: apache/airflow:2.3.0
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@postgres/mydb
+      AIRFLOW__CORE__FERNET_KEY: 'YOUR_FERNET_KEY'
+    ports:
+      - "8080:8080"
+    networks:
+      - backend
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags 
+
+networks:
+  backend:
+    driver: bridge
