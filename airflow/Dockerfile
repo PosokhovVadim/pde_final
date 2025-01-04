@@ -18,12 +18,16 @@ RUN pip install --upgrade pip \
     apache-airflow-providers-mongo \
     apache-airflow-providers-apache-hive \
     apache-airflow-providers-apache-spark \
-    pyspark
+    pyspark pyopenssl boto3 azure-datalake-store
+
+RUN pip install protobuf==3.20.*
 
 WORKDIR /opt/airflow
 
 USER airflow
 
-COPY . /opt/airflow
+COPY dags /opt/airflow/dags
+COPY plugins /opt/airflow/plugins
+COPY logs /opt/airflow/logs
 
-ENTRYPOINT ["bash", "-c", "airflow db init && airflow webserver"]
+ENTRYPOINT ["bash", "-c", "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email posokhovvadyusha@gmail.com --password admin && airflow webserver"]
