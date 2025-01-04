@@ -30,4 +30,4 @@ COPY dags /opt/airflow/dags
 COPY plugins /opt/airflow/plugins
 COPY logs /opt/airflow/logs
 
-ENTRYPOINT ["bash", "-c", "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email posokhovvadyusha@gmail.com --password admin && airflow webserver"]
+ENTRYPOINT ["bash", "-c", "airflow db migrate && airflow users create --username admin --firstname Admin --lastname User --role Admin --email posokhovvadyusha@gmail.com --password admin && airflow webserver"]
