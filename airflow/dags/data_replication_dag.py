@@ -17,11 +17,10 @@ def replicate_postgres_table_to_hive(table_name, hive_table_name):
     cursor.execute(f'SELECT * FROM {table_name}')  
     data = cursor.fetchall()
 
-    # Writing to CSV
     file_path = f'/tmp/postgres_{table_name}.csv'
     with open(file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([desc[0] for desc in cursor.description])  # Column headers
+        writer.writerow([desc[0] for desc in cursor.description]) 
         writer.writerows(data)
 
     print(f"PostgreSQL data from table {table_name} have written to file: {file_path}")
@@ -32,7 +31,6 @@ def replicate_mongo_collection_to_hive(collection_name, hive_table_name):
     collection = mongo_hook.get_collection(collection_name)
     data = collection.find()
 
-    # Writing to CSV
     file_path = f'/tmp/mongo_{collection_name}.csv'
     with open(file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
@@ -123,8 +121,70 @@ with DAG(
         mongo_tasks.append(mongo_task)
         hive_mongo_tasks.append(hive_task)
 
+    # Tasks
     for pg_task, hive_pg_task in zip(postgres_tasks, hive_postgres_tasks):
         pg_task >> hive_pg_task
 
     for mongo_task, hive_mongo_task in zip(mongo_tasks, hive_mongo_tasks):
         mongo_task >> hive_mongo_task
+
+    # Metrics
+    ## 1.User activity metrics
+    create_user_activity_summary = HiveOperator(
+        task_id='create_user_activity_summary',
+        hql="""
+        CREATE TABLE user_activity_summary AS
+        SELECT
+            u.user_id,
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            AVG(o.total_amount) AS avg_order_value,
+            COUNT(DISTINCT r.review_id) AS total_reviews,
+            MAX(o.order_date) AS last_activity
+        FROM users_hive u
+        LEFT JOIN orders_hive o ON u.user_id = o.user_id
+        LEFT JOIN product_reviews_hive r ON u.user_id = r.user_id
+        GROUP BY u.user_id;
+        """,
+        hive_cli_conn_id='hive_default'
+    )
+
+    ## 2.Promotion Effectiveness metrics
+    create_promotion_effectiveness = HiveOperator(
+        task_id='create_promotion_effectiveness',
+        hql="""
+        CREATE TABLE promotion_effectiveness AS
+        SELECT
+            p.promotion_id,
+            SUM(od.quantity * od.unit_price) AS total_sales,
+            COUNT(DISTINCT od.order_id) AS total_orders,
+            AVG(od.quantity * od.unit_price) AS avg_order_value,
+            p.start_date,
+            p.end_date
+        FROM promotions_hive p
+        LEFT JOIN order_details_hive od ON p.product_id = od.product_id
+        GROUP BY p.promotion_id, p.start_date, p.end_date;
+        """,
+        hive_cli_conn_id='hive_default'
+    )
+
+    ## 3.Support quality metrics
+    create_support_quality_metrics = HiveOperator(
+        task_id='create_support_quality_metrics',
+        hql="""
+        CREATE TABLE support_quality_metrics AS
+        SELECT
+            s.support_agent_id AS agent_id,
+            COUNT(DISTINCT s.chat_id) AS total_chats,
+            AVG(UNIX_TIMESTAMP(s.end_time) - UNIX_TIMESTAMP(s.start_time)) / 60 AS avg_response_time,
+            AVG(s.satisfaction_score) AS satisfaction_score,
+            SUM(CASE WHEN s.chat_status = 'Closed' THEN 1 ELSE 0 END) AS resolved_chats
+        FROM support_chats_hive s
+        GROUP BY s.support_agent_id;
+        """,
+        hive_cli_conn_id='hive_default'
+    )
+
+    for hive_task in hive_postgres_tasks + hive_mongo_tasks:
+        hive_task >> create_user_activity_summary
+        hive_task >> create_promotion_effectiveness
+        hive_task >> create_support_quality_metrics
