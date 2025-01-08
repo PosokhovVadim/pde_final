@@ -76,7 +76,6 @@ db.SupportTickets.insertMany([
     }
 ]);
 
-// Вставка рекомендаций для пользователей
 db.ProductRecommendations.insertMany([
     {
         user_id: 1,
@@ -90,7 +89,7 @@ db.ProductRecommendations.insertMany([
     }
 ]);
 
-db.ProductReviews.insertMany([
+db.ModerationQueue.insertMany([
     {
         review_id: 1,
         user_id: 1,
@@ -113,7 +112,7 @@ db.ProductReviews.insertMany([
     }
 ]);
 
-db.UserQueries.insertMany([
+db.SearchQueries.insertMany([
     {
         query_id: 1,
         user_id: 1,

@@ -98,3 +98,20 @@ services:
     entrypoint: ["bash", "-c", "airflow db init && airflow webserver"]
     depends_on:
       - postgres
+  
+  data-generator:
+    build:
+      context: ./data_gen
+      dockerfile: Dockerfile
+    container_name: data-generator
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+      - POSTGRES_HOST=postgres
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+    depends_on:
+      - postgres
+      - mongodb
+
